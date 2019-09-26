@@ -184,6 +184,8 @@ public class Map
 
     public void ProcessSearchBased()
     {
+        var radars = SortRadarDataByDensest(Radars);
+
         //we need 1 robots with radar
         //first and last will implent greedy
         for (int i = 0; i < MyRobots.Count(); i++)
@@ -246,19 +248,19 @@ public class Map
                 }
                 else
                 {
-                    var rdr = FindNearestRadar(entity);
+                    var rdr = FindNearestOreCellByEntity(entity).FirstOrDefault();
 
                     if (rdr != null)
                     {
-                        entity.Dig(rdr.Position);
+                        entity.Dig(rdr);
                     }
                     else
                     {
-                        var get = Get(entity.Position.X + 1, entity.Position.Y);
+                        var get = FindNearestRadar(entity);
 
                         if (get != null)
                         {
-                            entity.Dig(get);
+                            entity.Dig(get.Position);
                         }
                     }
                 }
@@ -268,10 +270,11 @@ public class Map
                 //find nearest radar to et
 
 
-                if (Radars.Count() > 1)
+                if (radars.Count() > 1)
                 {
-                    var radars = SortRadarDataByDensest(Radars);
-
+                    //don't find the radar you mong
+                    //it's supposed to be biased to the distance measurement
+                    //find the patchy
                     var highest = radars.FirstOrDefault();
                     var ayy = FindRadar2(highest);
 
@@ -286,11 +289,14 @@ public class Map
                 }
                 else
                 {
+                    //you have the radar
                     var radar = FindNearestRadar(entity);
 
                     if (radar != null)
                     {
-                        var patchOfMinerals = FindNearestDenseOreCellByArea(radar);
+                        //from the radar to my harvester
+                        //how far is the CLOSEST patch of minerals?
+                        var patchOfMinerals = FindNearestOreCellByEntity(entity).FirstOrDefault();
 
                         if (patchOfMinerals != null && patchOfMinerals.OreValue > 0)
                         {
@@ -383,13 +389,59 @@ public class Map
         return coord;
     }
 
+    public IEnumerable<Coordinate> FindNearestOreCellByEntity(Entity robot)
+    {
+        Dictionary<Coordinate, float> distanceTable = new Dictionary<Coordinate, float>();
+
+        for (int i = robot.Position.X - 4; i < robot.Position.X + 4; i++)
+        {
+            for (int j = robot.Position.Y - 4; j < robot.Position.Y + 4; j++)
+            {
+                if (i > Width)
+                {
+                    i = Width;
+                }
+
+                if (j > Height)
+                {
+                    j = Height;
+                }
+
+                if (i < 0)
+                {
+                    i = 0;
+                }
+
+                if (j < 0)
+                {
+                    j = 0;
+                }
+
+                var cell = Get(i, j);
+
+                if (cell != null && (cell.Type == TileType.Ore && cell.OreValue > 0))
+                {
+                    distanceTable[cell] = robot.Position.Distance(cell);
+                }
+            }
+        }
+
+        return distanceTable.OrderByDescending(f=>f.Value).Select(f=>f.Key);
+    }
+
+    private IEnumerable<Entity> _ayymap;
+
     public IEnumerable<Entity> SortRadarDataByDensest(IEnumerable<Entity> radars)
     {
         Dictionary<Entity, int> varues = new Dictionary<Entity, int>();
 
         foreach(var radar in radars)
         {
-            varues[radar] = DoSummation(radar);
+            var sum = DoSummation(radar);
+            if (sum != 0)
+            {
+                varues[radar] = sum;
+            }
         }
 
         return varues.OrderByDescending(f => f.Value).Select(f => f.Key);
@@ -561,11 +613,7 @@ public class Entity
 
     public float Distance(Entity entity)
     {
-        return (float)
-            Math.Sqrt(
-                Math.Abs(
-                    Math.Pow((Position.Y - entity.Position.Y), 2) +
-                    Math.Pow((Position.X - entity.Position.X), 2)));
+        return this.Position.Distance(entity.Position);
     }
 }
 
@@ -602,6 +650,16 @@ public class Coordinate : IEquatable<Coordinate>
     {
         OreValue--;
     }
+
+    public float Distance(Coordinate other)
+    {
+        return (float)
+            Math.Sqrt(
+                Math.Abs(
+                    Math.Pow((Y - other.Y), 2) +
+                    Math.Pow((X - other.X), 2)));
+    }
+
 }
 
 public enum EntityType
