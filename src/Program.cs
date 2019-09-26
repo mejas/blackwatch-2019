@@ -42,19 +42,16 @@ class Player
                     string ore = inputs[2 * j];// amount of ore or "?" if unknown
                     int hole = int.Parse(inputs[2 * j + 1]);// 1 if cell has a hole
 
-                    if (ore == "?")
+                    if(ore == "?")
                     {
                         coord.SetType(TileType.Ore);
                     }
-                    else if (hole == 1)
+
+                    if(hole == 1)
                     {
                         coord.SetType(TileType.Hole);
                     }
-                    else if(ore != "?")
-                    {
-                        coord.SetType(TileType.Ore);
-                        coord.SetOreValue(int.Parse(ore));
-                    }
+                    
                 }
             }
 
@@ -73,13 +70,15 @@ class Player
                 int y = int.Parse(inputs[3]); // position of the entity
                 int item = int.Parse(inputs[4]); // if this entity is a robot, the item it is carrying (-1 for NONE, 2 for RADAR, 3 for TRAP, 4 for ORE)
 
-                map.UpdateEntity(new Entity(id, type, map.Get(x, y), item));
+                var eyy = new Entity(id, type, map.Get(x, y), item);
+
+                map.UpdateEntity(eyy);
 
             }
 
             Console.Error.WriteLine(map.Entities.Count());
             map.ProcessGreedy();
-            foreach (var et in map.Entities.Where(e => e.IsRobot))
+            foreach (var et in map.MyRobots)
             {
                 // Write an action using Console.WriteLine()
                 // To debug: Console.Error.WriteLine("Debug messages...");
@@ -103,6 +102,14 @@ public class Map
         get
         {
             return _entities.Values;
+        }
+    }
+
+    public IEnumerable<Entity> MyRobots
+    {
+        get
+        {
+            return _entities.Values.Where(v => v.IsMyRobot);
         }
     }
 
@@ -139,29 +146,31 @@ public class Map
 
     public void ProcessGreedy()
     {
-        foreach (var entity in _entities)
+        foreach (var et in MyRobots)
         {
-            var et = entity.Value;
-
-            if (et.IsRobot)
+            if(et.Item == Item.Ore)
             {
-                if (et.Item != Item.Ore)
+                //run back
+                et.Move(Get(0, et.Position.Y));
+                continue;
+            }
+
+            var target = FindNearestOreCell(et);
+
+            if (target != null)
+            {
+                et.Dig(target);
+            }
+            else
+            {
+                var moveTgt = Get(et.Position.X + 4, et.Position.Y);
+                if (moveTgt != null)
                 {
-                    //get the nearest ore cell
-                    var nearestOreCell = FindNearestOreCell(et);
-                    //dig and retreat
-                    if (nearestOreCell != null)
-                    {
-                        et.Dig(nearestOreCell);
-                    }
-                    else
-                    {
-                        et.Move(Get(Width, et.Position.Y));
-                    }
+                    et.Move(moveTgt);
                 }
                 else
                 {
-                    et.Move(Get(0, et.Position.Y));
+                    et.Wait();
                 }
             }
         }
@@ -170,11 +179,10 @@ public class Map
     private Coordinate FindNearestOreCell(Entity et)
     {
         Coordinate coord = null;
-        for (int i = et.Position.X; i < Width; i++)
+        for (int i = 2; i < Width; i++)
         {
             var cell = Get(i, et.Position.Y);
 
-            Console.Error.WriteLine($"found ore in {cell.X} {cell.Y} with {cell.Type}");
             if (cell.Type == TileType.Ore)
             {
                 coord = cell;
@@ -201,28 +209,33 @@ public class Entity
         Type = (EntityType)type;
         Position = position;
 
-        if (IsRobot)
+        if (IsMyRobot)
         {
             Item = (Item)item;
         }
     }
 
-    public bool IsRobot
+    public bool IsMyRobot
     {
         get
         {
-            return Type == (EntityType.AllyRobot | EntityType.HostileRobot);
+            return Type == EntityType.AllyRobot;
         }
     }
 
     public void Dig(Coordinate nearestOreCell)
     {
-        Command = $"DIG {nearestOreCell.X - 1} {nearestOreCell.Y}";
+        Command = $"DIG {nearestOreCell.X} {nearestOreCell.Y}";
     }
 
     public void Move(Coordinate coordinate)
     {
         Command = $"MOVE {coordinate.X} {coordinate.Y}";
+    }
+
+    public void Wait()
+    {
+        Command = "WAIT";
     }
 }
 
