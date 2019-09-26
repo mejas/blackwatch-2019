@@ -42,20 +42,18 @@ class Player
                     string ore = inputs[2 * j];// amount of ore or "?" if unknown
                     int hole = int.Parse(inputs[2 * j + 1]);// 1 if cell has a hole
 
-                    if(ore == "?")
+                    coord.SetType(TileType.Ore);
+
+                    if (int.TryParse(ore, out int val))
                     {
-                        coord.SetType(TileType.Ore);
+                        coord.SetOreValue(val);
                     }
 
-                    if(hole == 1)
+                    if (hole == 1)
                     {
                         coord.SetType(TileType.Hole);
-                        if (int.TryParse(ore, out int val))
-                        {
-                            coord.SetOreValue(val);
-                        }
                     }
-                    
+
                 }
             }
 
@@ -76,9 +74,12 @@ class Player
                 int y = int.Parse(inputs[3]); // position of the entity
                 int item = int.Parse(inputs[4]); // if this entity is a robot, the item it is carrying (-1 for NONE, 2 for RADAR, 3 for TRAP, 4 for ORE)
 
-                var eyy = new Entity(id, type, map.Get(x, y), item);
 
-                map.UpdateEntity(eyy);
+                if (x != -1 && y != -1)
+                {
+                    var eyy = new Entity(id, type, map.Get(x, y), item);
+                    map.UpdateEntity(eyy);
+                }
 
             }
 
@@ -154,6 +155,13 @@ public class Map
         EnemyScore = enemy;
     }
 
+    public Entity Get(int entId)
+    {
+        _entities.TryGetValue(entId, out Entity entie);
+
+        return entie;
+    }
+
     public void UpdateEntity(Entity entity)
     {
         _entities[entity.Id] = entity;
@@ -163,7 +171,7 @@ public class Map
     {
         foreach (var et in MyRobots)
         {
-            if(et.Item == Item.Ore)
+            if (et.Item == Item.Ore)
             {
                 //run back
                 et.Move(Get(0, et.Position.Y));
@@ -174,18 +182,6 @@ public class Map
         }
     }
 
-    private int _track = -1;
-    private static Random randomNumber = new Random();
-    public int GetRandomStuff()
-    {
-        if (_track == -1)
-        {
-            _track = randomNumber.Next(1, 4);
-        }
-
-        return _track;
-    }
-
     public void ProcessSearchBased()
     {
         //we need 1 robots with radar
@@ -194,6 +190,10 @@ public class Map
         {
             var entity = MyRobots.ElementAt(i);
 
+            if (Radars.Count() >= 8)
+            {
+                CanRequestRadar = false;
+            }
             //mid boi, pick up the radar and drop it in the middle
             if (entity.AtHome() && CanRequestRadar)
             {
@@ -203,69 +203,108 @@ public class Map
             else if (entity.Item == Item.Radar)
             {
                 //drop it in the middle of quadrant
-                var coords = GetRandomStuff();
-
-                switch (coords)
+                var mp = new Coordinate(6, 4);
+                var mp2 = new Coordinate(14, 4);
+                var mp3 = new Coordinate(21, 4);
+                var mp4 = new Coordinate(26, 4);
+                var mp5 = new Coordinate(6, 10);
+                var mp6 = new Coordinate(14, 10);
+                var mp7 = new Coordinate(21, 10);
+                var mp8 = new Coordinate(26, 10);
+               
+                if (GetRadar(mp) == null)
                 {
-                    case 1:
-                        Console.Error.WriteLine("PUT RADAR IN A MALL. 1");
-                        var mp = new Coordinate(30 / 4, 15 / 4);
-                        entity.Dig(mp);
-                        if(entity.Position.Equals(mp))
-                        {
-                            _track = -1;
-                        }
-                        break;
-                    case 2:
-                        Console.Error.WriteLine("PUT RADAR IN A MALL. 2");
-                        var mp2 = new Coordinate(30 - 30 / 4, 15 / 4);
-                        entity.Dig(mp2);
-                        if(entity.Position.Equals(mp2))
-                        {
-                            _track = -1;
-                        }
-                        break;
-                    case 3:
-                        Console.Error.WriteLine("PUT RADAR IN A MALL. 3");
-                        var mp3 = new Coordinate(30 - 30 / 4, 15 / 4);
-                        entity.Dig(mp3);
-                        if(entity.Position.Equals(mp3))
-                        {
-                            _track = -1;
-                        }
+                    entity.Dig(mp);
+                }
+                else if (GetRadar(mp5) == null)
+                {
+                    entity.Dig(mp5);
+                }
+                else if (GetRadar(mp2) == null)
+                {
+                    entity.Dig(mp2);
+                }
+                else if (GetRadar(mp6) == null)
+                {
+                    entity.Dig(mp6);
+                }
+                else if (GetRadar(mp3) == null)
+                {
+                    entity.Dig(mp3);
+                }
+                else if (GetRadar(mp7) == null)
+                {
+                    entity.Dig(mp7);
+                }
+                else if (GetRadar(mp8) == null)
+                {
+                    entity.Dig(mp8);
+                }
+                else if (GetRadar(mp4) == null)
+                {
+                    entity.Dig(mp4);
+                }
+                else
+                {
+                    var rdr = FindNearestRadar(entity);
 
-                        break;
-                    case 4:
-                        Console.Error.WriteLine("PUT RADAR IN A MALL. 4");
-                        var mp4 = new Coordinate(30 - 30 / 4, 15 - 15 / 4);
-                        entity.Dig(mp4);
-                        if(entity.Position.Equals(mp4))
+                    if (rdr != null)
+                    {
+                        entity.Dig(rdr.Position);
+                    }
+                    else
+                    {
+                        var get = Get(entity.Position.X + 1, entity.Position.Y);
+
+                        if (get != null)
                         {
-                            _track = -1;
+                            entity.Dig(get);
                         }
-                        break;
+                    }
                 }
             }
             else if (entity.Item == Item.None)
             {
                 //find nearest radar to et
-                var radar = FindNearestRadar(entity);
 
-                if (radar != null)
+
+                if (Radars.Count() > 1)
                 {
-                    var patchOfMinerals = FindNearestDenseOreCellByArea(radar);
+                    var radars = SortRadarDataByDensest(Radars);
 
-                    if (patchOfMinerals != null)
+                    var highest = radars.FirstOrDefault();
+                    var ayy = FindRadar2(highest);
+
+                    if (highest != null && ayy != null)
                     {
-                        entity.Dig(patchOfMinerals);
+                        entity.Dig(ayy);
                     }
-
+                    else
+                    {
+                        entity.DigGreedy(this);
+                    }
                 }
-
                 else
                 {
+                    var radar = FindNearestRadar(entity);
 
-                    entity.DigGreedy(this);
+                    if (radar != null)
+                    {
+                        var patchOfMinerals = FindNearestDenseOreCellByArea(radar);
+
+                        if (patchOfMinerals != null && patchOfMinerals.OreValue > 0)
+                        {
+                            entity.Dig(patchOfMinerals);
+                        }
+                        else
+                        {
+                            entity.DigGreedy(this);
+                        }
+                    }
+                    else
+                    {
+                        entity.DigGreedy(this);
+                    }
                 }
             }
             else if (entity.Item == Item.Ore)
@@ -273,6 +312,41 @@ public class Map
                 entity.MoveHorizontal(-entity.Position.X);
             }
         }
+    }
+
+    private Entity GetRadar(Coordinate mp)
+    {
+        var item = _entities.Values.Where(f => f.Position.Equals(mp)).FirstOrDefault();
+
+        if (item != null && item.Type == EntityType.BuriedRadar)
+        {
+            return item;
+        }
+
+        return null;
+    }
+
+    public Coordinate FindRadar2(Entity robot)
+    {
+        Coordinate mineralPatch = null;
+
+        foreach (var radar in Radars)
+        {
+            //what's a good radar?
+
+            var et = FindNearestDenseOreCellByArea(radar);
+
+            if (mineralPatch == null)
+            {
+                mineralPatch = et;
+            }
+            else if (et != null && mineralPatch.OreValue < et.OreValue)
+            {
+                mineralPatch = et;
+            }
+        }
+
+        return mineralPatch;
     }
 
     private Entity FindNearestRadar(Entity entity)
@@ -288,7 +362,7 @@ public class Map
                 retVal = radar;
             }
         }
-        Console.Error.WriteLine($"Dist. Entity {entity.Id} : {minDist} to radar {retVal?.Id}");
+        //Console.Error.WriteLine($"Dist. Entity {entity.Id} : {minDist} to radar {retVal?.Id}");
         return retVal;
     }
 
@@ -309,13 +383,25 @@ public class Map
         return coord;
     }
 
-    public Coordinate FindNearestDenseOreCellByArea(Entity radar)
+    public IEnumerable<Entity> SortRadarDataByDensest(IEnumerable<Entity> radars)
     {
-        List<Coordinate> coords = new List<Coordinate>();
+        Dictionary<Entity, int> varues = new Dictionary<Entity, int>();
+
+        foreach(var radar in radars)
+        {
+            varues[radar] = DoSummation(radar);
+        }
+
+        return varues.OrderByDescending(f => f.Value).Select(f => f.Key);
+    }
+
+    private int DoSummation(Entity radar)
+    {
+        var sigma = 0;
 
         for (int i = radar.Position.X - 4; i < radar.Position.X + 4; i++)
         {
-            for (int j = radar.Position.Y - 4; j < radar.Position.Y; j++)
+            for (int j = radar.Position.Y - 4; j < radar.Position.Y + 4; j++)
             {
                 if (i > Width)
                 {
@@ -339,7 +425,47 @@ public class Map
 
                 var coordsItem = Get(i, j);
 
-                if (coordsItem.Type == TileType.Ore)
+                if (coordsItem != null)
+                {
+                    sigma += coordsItem.OreValue;
+                }
+            }
+        }
+
+        return sigma;
+    }
+
+    public Coordinate FindNearestDenseOreCellByArea(Entity radar)
+    {
+        List<Coordinate> coords = new List<Coordinate>();
+
+        for (int i = radar.Position.X - 4; i < radar.Position.X + 4; i++)
+        {
+            for (int j = radar.Position.Y - 4; j < radar.Position.Y + 4; j++)
+            {
+                if (i > Width)
+                {
+                    i = Width;
+                }
+
+                if (j > Height)
+                {
+                    j = Height;
+                }
+
+                if (i < 0)
+                {
+                    i = 0;
+                }
+
+                if (j < 0)
+                {
+                    j = 0;
+                }
+
+                var coordsItem = Get(i, j);
+
+                if (coordsItem != null && coordsItem.OreValue > 0)
                 {
                     coords.Add(coordsItem);
                 }
@@ -388,19 +514,22 @@ public class Entity
     public void Dig(Coordinate nearestOreCell)
     {
         Command = $"DIG {nearestOreCell.X} {nearestOreCell.Y}";
+
+        nearestOreCell.Harvest();
     }
 
     public void DigGreedy(Map map)
     {
         var coords = map.FindNearestOreCellByWidth(this);
-        
+
         if (coords != null)
         {
             Dig(coords);
         }
         else
         {
-            Wait();
+            // if at the end
+            Dig(map.FindRadar2(this));
         }
     }
 
@@ -467,6 +596,11 @@ public class Coordinate : IEquatable<Coordinate>
     {
         return X == other.X &&
                Y == other.Y;
+    }
+
+    public void Harvest()
+    {
+        OreValue--;
     }
 }
 
